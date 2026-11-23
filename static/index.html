@@ -1,0 +1,91 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PC Storage</title>
+<style>
+*{box-sizing:border-box}body{font-family:system-ui,sans-serif;margin:0;background:#0f172a;color:#e2e8f0}
+.wrap{max-width:900px;margin:0 auto;padding:16px}
+button,input{font:inherit}button{background:#2563eb;color:#fff;border:0;border-radius:8px;padding:8px 14px;cursor:pointer}
+button.g{background:#334155}button.r{background:#b91c1c}
+input[type=text],input[type=password]{background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:10px;width:100%}
+.card{background:#1e293b;border-radius:12px;padding:16px}
+#login{max-width:340px;margin:12vh auto}#login input{margin-bottom:10px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0}
+.row{display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid #334155}
+.row .n{flex:1;word-break:break-all;cursor:pointer}.row .m{color:#94a3b8;font-size:13px;white-space:nowrap}
+.crumb{color:#94a3b8}.err{color:#f87171;min-height:20px}
+#drop{border:2px dashed #475569;border-radius:12px;padding:14px;text-align:center;color:#94a3b8}
+#drop.on{border-color:#2563eb;color:#e2e8f0}
+</style></head><body><div class="wrap">
+<div id="login" class="card" style="display:none"><h2 style="margin-top:0">PC Storage</h2>
+<input id="u" type="text" placeholder="Username" autocomplete="username"><input id="p" type="password" placeholder="Password" autocomplete="current-password">
+<div class="err" id="le"></div><button onclick="login()" style="width:100%">Masuk</button></div>
+<div id="app" style="display:none">
+<div class="bar"><b id="who"></b>
+<span id="tabs"></span>
+<span style="flex:1"></span><button class="g" id="adm" style="display:none" onclick="toggleAdmin()">⚙ Admin</button><button class="g" onclick="logout()">Keluar</button></div>
+<div id="admin" class="card" style="display:none;margin-bottom:12px"></div>
+<div class="card"><div class="crumb" id="crumb"></div>
+<div class="bar"><button onclick="mk()">+ Folder baru</button><span class="err" id="e"></span></div>
+<div id="drop">Seret file ke sini atau <a href="#" onclick="document.getElementById('f').click();return false" style="color:#60a5fa">pilih file</a> <span id="prog"></span>
+<input id="f" type="file" multiple style="display:none"></div><div id="list"></div></div></div>
+<script>
+let space='me',path='';const $=id=>document.getElementById(id);
+async function api(url,opt){const r=await fetch(url,opt);if(r.status===401&&url!=='/api/login'){show(false);throw 0}
+ if(!r.ok){let m='Error';try{m=(await r.json()).detail}catch{}throw m}return r.json()}
+const post=(u,b)=>api(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+function show(ok){$('login').style.display=ok?'none':'block';$('app').style.display=ok?'block':'none'}
+async function login(){try{await post('/api/login',{username:$('u').value,password:$('p').value});$('p').value='';init()}catch(e){$('le').textContent=e}}
+async function logout(){await post('/api/logout',{});show(false)}
+async function init(){try{const m=await api('/api/me');$('who').textContent='👤 '+m.user;$('adm').style.display=m.admin?'':'none';show(true);setSpace('me')}catch{show(false)}}
+async function setSpace(s){space=s;path='';const sp=await api('/api/spaces');
+ $('tabs').innerHTML=sp.map(x=>`<button class="${x.id==s?'':'g'}" data-s="${esc(x.id)}">${esc(x.name)}</button> `).join('');load()}
+$('tabs').onclick=e=>{if(e.target.dataset.s)setSpace(e.target.dataset.s)};
+const sz=n=>n>1e9?(n/1e9).toFixed(2)+' GB':n>1e6?(n/1e6).toFixed(1)+' MB':n>1e3?(n/1e3).toFixed(0)+' KB':n+' B';
+const j=(a,b)=>a?a+'/'+b:b;
+async function load(){$('e').textContent='';try{const d=await api(`/api/list?space=${space}&path=${encodeURIComponent(path)}`);
+ $('crumb').innerHTML=(path?`<a href="#" style="color:#60a5fa" onclick="up();return false">⬆ Naik</a> · `:'')+'/'+path;
+ $('list').innerHTML=d.items.map(i=>`<div class="row"><span class="n" data-n="${encodeURIComponent(i.name)}" data-d="${i.dir?1:0}">${i.dir?'📁':'📄'} ${esc(i.name)}</span><span class="m">${i.dir?'':sz(i.size)}</span>
+ <button class="g" data-a="rn" data-n="${encodeURIComponent(i.name)}">Ubah</button><button class="r" data-a="rm" data-n="${encodeURIComponent(i.name)}">Hapus</button></div>`).join('')||'<p class="crumb">Kosong</p>'}catch(e){if(e)$('e').textContent=e}}
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function up(){path=path.split('/').slice(0,-1).join('/');load()}
+$('list').onclick=async e=>{const t=e.target;if(!t.dataset.n)return;const n=decodeURIComponent(t.dataset.n);
+ try{if(t.dataset.a==='rm'){if(confirm('Hapus "'+n+'"? Tidak bisa dibatalkan.')){await post('/api/delete',{space,path:j(path,n)});load()}}
+ else if(t.dataset.a==='rn'){const x=prompt('Nama baru:',n);if(x){await post('/api/rename',{space,path:j(path,n),name:x});load()}}
+ else if(t.dataset.d==='1'){path=j(path,n);load()}else location='/api/download?space='+space+'&path='+encodeURIComponent(j(path,n))}catch(e){if(e)$('e').textContent=e}}
+async function mk(){const n=prompt('Nama folder:');if(n){try{await post('/api/mkdir',{space,path,name:n});load()}catch(e){$('e').textContent=e}}}
+function upload(files){if(!files.length)return;const fd=new FormData();for(const f of files)fd.append('files',f);
+ const x=new XMLHttpRequest();x.open('POST',`/api/upload?space=${space}&path=${encodeURIComponent(path)}`);
+ x.upload.onprogress=e=>$('prog').textContent=Math.round(e.loaded/e.total*100)+'%';
+ x.onload=()=>{$('prog').textContent='';x.status==200?load():$('e').textContent='Upload gagal ('+x.status+')'};x.send(fd)}
+$('f').onchange=e=>{upload(e.target.files);e.target.value=''};
+const d=$('drop');d.ondragover=e=>{e.preventDefault();d.classList.add('on')};d.ondragleave=()=>d.classList.remove('on');
+d.ondrop=e=>{e.preventDefault();d.classList.remove('on');upload(e.dataTransfer.files)};
+
+let adminOpen=false;
+async function toggleAdmin(){adminOpen=!adminOpen;$('admin').style.display=adminOpen?'block':'none';if(adminOpen)renderAdmin()}
+async function renderAdmin(){const [f,u]=await Promise.all([api('/api/admin/folders'),api('/api/admin/users')]);const names=Object.keys(u);
+ $('admin').innerHTML=`<h3 style="margin-top:0">Folder PC yang dibagikan</h3>
+ ${Object.entries(f).map(([k,v])=>`<div class="row"><span class="n">💻 <b>${esc(k)}</b><br><span class="m">${esc(v.path)} · akses: ${esc(v.users.join(', ')=='admin'?'hanya admin':v.users.join(', '))} · ${v.readonly?'baca-saja':'bisa tulis'}</span></span><button class="r" data-af="${encodeURIComponent(k)}">Berhenti bagikan</button></div>`).join('')||'<p class="crumb">Belum ada folder dibagikan</p>'}
+ <div style="margin-top:12px"><b>Tambah folder</b>
+ <input id="fn" type="text" placeholder="Nama tampilan (mis. Dokumen)" style="margin:6px 0">
+ <div style="display:flex;gap:8px"><input id="fp" type="text" placeholder="Path di PC (mis. C:\\Users\\Anda\\Documents)"><button class="g" onclick="openBrowse('')">Telusuri PC</button></div>
+ <div id="br" style="display:none;background:#0f172a;border-radius:8px;margin-top:8px;max-height:260px;overflow:auto"></div>
+ <div style="margin:8px 0">Boleh diakses oleh: <label><input type="checkbox" id="fall"> Semua user</label> ${names.map(n=>`<label style="margin-left:10px"><input type="checkbox" class="fu" value="${esc(n)}"> ${esc(n)}</label>`).join('')}
+ <br><small class="crumb">Tanpa centang = hanya admin</small></div>
+ <label><input type="checkbox" id="fro"> Baca-saja (tanpa upload/hapus)</label><br><br>
+ <button onclick="addFolder()">Bagikan folder</button> <span class="err" id="ae"></span></div>
+ <hr style="border-color:#334155;margin:18px 0"><h3>User</h3>
+ ${names.map(n=>`<div class="row"><span class="n">👤 ${esc(n)} ${u[n]?'<span class="m">(admin)</span>':''}</span><button class="r" data-au="${encodeURIComponent(n)}">Hapus</button></div>`).join('')}
+ <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><input id="un" type="text" placeholder="Username" style="flex:1"><input id="up" type="password" placeholder="Password (min 6)" style="flex:1"><label style="align-self:center"><input type="checkbox" id="ua"> admin</label><button onclick="addUser()">Tambah user</button></div><span class="err" id="ue"></span>`}
+$('admin').onclick=async e=>{const t=e.target;try{
+ if(t.dataset.af){const n=decodeURIComponent(t.dataset.af);if(confirm('Berhenti membagikan "'+n+'"? File asli di PC tidak dihapus.')){await post('/api/admin/folders/delete',{name:n});renderAdmin();setSpace(space.startsWith('f:')?'me':space)}}
+ if(t.dataset.au){const n=decodeURIComponent(t.dataset.au);if(confirm('Hapus user "'+n+'"? (file pribadinya tetap ada di storage)')){await post('/api/admin/users/delete',{name:n});renderAdmin()}}
+ if(t.dataset.bp!==undefined){openBrowse(decodeURIComponent(t.dataset.bp))}
+ if(t.dataset.pick){$('fp').value=decodeURIComponent(t.dataset.pick);$('br').style.display='none';if(!$('fn').value)$('fn').value=$('fp').value.replace(/[\\/]+$/,'').split(/[\\/]/).pop().slice(0,32)}
+ }catch(x){if(x)alert(x)}}
+async function openBrowse(p){try{const d=await api('/api/admin/browse?path='+encodeURIComponent(p));const b=$('br');b.style.display='block';
+ b.innerHTML=`<div class="row"><span class="n crumb">${esc(d.path||'Drive')}</span>${d.path?`<button data-pick="${encodeURIComponent(d.path)}">Pilih folder ini</button>`:''}${d.parent!==null?`<button class="g" data-bp="${encodeURIComponent(d.parent)}">⬆</button>`:''}</div>`+d.dirs.map(x=>`<div class="row"><span class="n" data-bp="${encodeURIComponent(x)}">📁 ${esc(x)}</span></div>`).join('')}catch(x){$('ae').textContent=x||''}}
+async function addFolder(){try{const us=$('fall').checked?['*']:[...document.querySelectorAll('.fu:checked')].map(x=>x.value);
+ await post('/api/admin/folders',{name:$('fn').value,path:$('fp').value,users:us.length?us:['admin'],readonly:$('fro').checked});renderAdmin();setSpace(space)}catch(x){$('ae').textContent=x||''}}
+async function addUser(){try{await post('/api/admin/users',{name:$('un').value,password:$('up').value,admin:$('ua').checked});renderAdmin()}catch(x){$('ue').textContent=x||''}}
+$('p').onkeydown=e=>{if(e.key==='Enter')login()};init();
+</script></div></body></html>
