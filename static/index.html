@@ -24,7 +24,7 @@ input[type=text],input[type=password]{background:#1e293b;color:#e2e8f0;border:1p
 <span style="flex:1"></span><button class="g" id="adm" style="display:none" onclick="toggleAdmin()">⚙ Admin</button><button class="g" onclick="logout()">Keluar</button></div>
 <div id="admin" class="card" style="display:none;margin-bottom:12px"></div>
 <div class="card"><div class="crumb" id="crumb"></div>
-<div class="bar"><button onclick="mk()">+ Folder baru</button><span class="err" id="e"></span></div>
+<div class="bar"><button onclick="mk()">+ Folder baru</button><button class="g" onclick="location='/api/download-folder?space='+space+'&path='+encodeURIComponent(path)">⬇ Unduh folder ini (ZIP)</button><span class="err" id="e"></span></div>
 <div id="drop">Seret file ke sini atau <a href="#" onclick="document.getElementById('f').click();return false" style="color:#60a5fa">pilih file</a> <span id="prog"></span>
 <input id="f" type="file" multiple style="display:none"></div><div id="list"></div></div></div>
 <script>
@@ -44,11 +44,12 @@ const j=(a,b)=>a?a+'/'+b:b;
 async function load(){$('e').textContent='';try{const d=await api(`/api/list?space=${space}&path=${encodeURIComponent(path)}`);
  $('crumb').innerHTML=(path?`<a href="#" style="color:#60a5fa" onclick="up();return false">⬆ Naik</a> · `:'')+'/'+path;
  $('list').innerHTML=d.items.map(i=>`<div class="row"><span class="n" data-n="${encodeURIComponent(i.name)}" data-d="${i.dir?1:0}">${i.dir?'📁':'📄'} ${esc(i.name)}</span><span class="m">${i.dir?'':sz(i.size)}</span>
- <button class="g" data-a="rn" data-n="${encodeURIComponent(i.name)}">Ubah</button><button class="r" data-a="rm" data-n="${encodeURIComponent(i.name)}">Hapus</button></div>`).join('')||'<p class="crumb">Kosong</p>'}catch(e){if(e)$('e').textContent=e}}
+ ${i.dir?`<button class="g" data-a="zip" data-n="${encodeURIComponent(i.name)}">⬇ ZIP</button>`:''}<button class="g" data-a="rn" data-n="${encodeURIComponent(i.name)}">Ubah</button><button class="r" data-a="rm" data-n="${encodeURIComponent(i.name)}">Hapus</button></div>`).join('')||'<p class="crumb">Kosong</p>'}catch(e){if(e)$('e').textContent=e}}
 const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function up(){path=path.split('/').slice(0,-1).join('/');load()}
 $('list').onclick=async e=>{const t=e.target;if(!t.dataset.n)return;const n=decodeURIComponent(t.dataset.n);
  try{if(t.dataset.a==='rm'){if(confirm('Hapus "'+n+'"? Tidak bisa dibatalkan.')){await post('/api/delete',{space,path:j(path,n)});load()}}
+ else if(t.dataset.a==='zip'){location='/api/download-folder?space='+space+'&path='+encodeURIComponent(j(path,n))}
  else if(t.dataset.a==='rn'){const x=prompt('Nama baru:',n);if(x){await post('/api/rename',{space,path:j(path,n),name:x});load()}}
  else if(t.dataset.d==='1'){path=j(path,n);load()}else location='/api/download?space='+space+'&path='+encodeURIComponent(j(path,n))}catch(e){if(e)$('e').textContent=e}}
 async function mk(){const n=prompt('Nama folder:');if(n){try{await post('/api/mkdir',{space,path,name:n});load()}catch(e){$('e').textContent=e}}}

@@ -6,7 +6,7 @@ Ubah PC Windows menjadi server file lokal. Laptop atau HP di jaringan yang sama 
 - Login multi-user (password di-hash scrypt, batas percobaan login)
 - Folder pribadi per user + folder bersama
 - Bagikan folder mana pun di PC lewat web (panel Admin), per user, opsi baca-saja
-- Upload (seret-lepas), download, buat folder, ubah nama, hapus
+- Upload (seret-lepas), download file, unduh seluruh folder sebagai ZIP (streaming, tanpa batas ukuran), buat folder, ubah nama, hapus
 - Tambah/hapus user dari web
 
 ## Mulai

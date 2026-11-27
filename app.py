@@ -1,7 +1,8 @@
-import os, re, shutil, socket
+import os, re, shutil, socket, zipfile
+from urllib.parse import quote
 from pathlib import Path
 from fastapi import FastAPI, Request, Response, HTTPException, UploadFile, File, Depends
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 import auth
 
@@ -104,6 +105,50 @@ def download(space: str, path: str, user=Depends(current_user)):
     _, p = resolve(user, space, path)
     if not p.is_file(): raise HTTPException(404, "File tidak ada")
     return FileResponse(p, filename=p.name)
+
+class _Sink:
+    def __init__(self): self.buf = []; self.pos = 0
+    def write(self, b): self.buf.append(bytes(b)); self.pos += len(b); return len(b)
+    def tell(self): return self.pos
+    def flush(self): pass
+    def drain(self): d = b"".join(self.buf); self.buf = []; return d
+
+def zip_stream(folder: Path, root_name: str):
+    sink = _Sink()
+    zf = zipfile.ZipFile(sink, "w", zipfile.ZIP_STORED, allowZip64=True)
+    zf.writestr(root_name + "/", b"")
+    for cur, dirs, files in os.walk(folder, followlinks=False):
+        cur = Path(cur)
+        dirs[:] = [d for d in dirs if not (cur / d).is_symlink()]
+        rel = cur.relative_to(folder).as_posix()
+        arc_dir = root_name if rel == "." else root_name + "/" + rel
+        if not dirs and not files and rel != ".": zf.writestr(arc_dir + "/", b"")
+        for fn in files:
+            fp = cur / fn
+            if fp.is_symlink() or fp.resolve() in SENSITIVE: continue
+            try: src = open(fp, "rb")
+            except OSError: continue
+            with src:
+                zi = zipfile.ZipInfo.from_file(fp, arc_dir + "/" + fn)
+                zi.compress_type = zipfile.ZIP_STORED
+                with zf.open(zi, "w", force_zip64=True) as dst:
+                    while True:
+                        c = src.read(1024 * 1024)
+                        if not c: break
+                        dst.write(c)
+                        yield sink.drain()
+        yield sink.drain()
+    zf.close()
+    yield sink.drain()
+
+@app.get("/api/download-folder")
+def download_folder(space: str, path: str = "", user=Depends(current_user)):
+    base, p = resolve(user, space, path)
+    if not p.is_dir(): raise HTTPException(404, "Folder tidak ada")
+    name = p.name or (space[2:] if space.startswith("f:") else user if space == "me" else "bersama")
+    name = re.sub(r'[\\/:*?"<>|]', "_", name) or "folder"
+    return StreamingResponse(zip_stream(p, name), media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename*=UTF-8''" + quote(name + ".zip")})
 
 class PathBody(BaseModel):
     space: str
